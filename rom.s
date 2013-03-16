@@ -18,6 +18,16 @@ theloop:  ld     %r3, %r0, #0
           subi   %r3, %r0, #40
           rtop   @p0, %r3
     @p0 ? jmpi   theloop
+    	  muli   %r2, %r1, #-3
+    	  ldi    %r3, #-111
+    	  muli   %r4, %r3, #-3
+    	  muli   %r5, %r3, #3
+    	  divi   %r6, %r4, #2
+    	  modi   %r7, %r4, #2
+    	  itof	 %r2, %r3
+    	  itof	 %r4, %r3
+    	  fmul	 %r5, %r4, %r2
+		  fadd	 %r6, %r5, %r4
 finished: jmpi   finished
 
 subroutine:

@@ -95,15 +95,17 @@ template <unsigned N, unsigned R, unsigned P> struct harpinst {
     ac[AC_3REG] = op == Lit<6>(0x07) || op == Lit<6>(0x08)
                || op == Lit<6>(0x09) || op == Lit<6>(0x0a)
                || op == Lit<6>(0x0b) || op == Lit<6>(0x0c)
+               || op == Lit<6>(0x0d) || op == Lit<6>(0x0e)
                || op == Lit<6>(0x0f) || op == Lit<6>(0x10)
                || op == Lit<6>(0x35) || op == Lit<6>(0x36)
-               || op == Lit<6>(0x37);
+               || op == Lit<6>(0x37) || op == Lit<6>(0x38);
     ac[AC_3REGSRC] = Lit(0);
     ac[AC_1IMM] = op == Lit<6>(0x1d);
     ac[AC_2IMM] = op == Lit<6>(0x1b) || op == Lit<6>(0x25);
     ac[AC_3IMM] = op == Lit<6>(0x11) || op == Lit<6>(0x12)
                || op == Lit<6>(0x13) || op == Lit<6>(0x14)
                || op == Lit<6>(0x15) || op == Lit<6>(0x16)
+               || op == Lit<6>(0x17) || op == Lit<6>(0x18)
                || op == Lit<6>(0x19) || op == Lit<6>(0x1a)
                || op == Lit<6>(0x23);
     ac[AC_3IMMSRC] = op == Lit<6>(0x24);

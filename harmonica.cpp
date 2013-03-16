@@ -33,12 +33,14 @@ const unsigned WIDTH(32), LOG2WIDTH(CLOG2(WIDTH)), REGS(8),
 //#define WITH_FXPU // Fixed point
 //#define WITH_DIV
 //#define WITH_MUL
-static const unsigned FPU_E(8), FPU_M(23);
+
 
 #ifdef DEBUG
 #define DBGTAP(x) do {TAP(x); } while(0)
+#define EXPOSE	0
 #else
 #define DBGTAP(x) do {} while(0)
+#define EXPOSE	1
 #endif
 
 using namespace std;
@@ -304,9 +306,11 @@ int main() {
   pipeline.addFuncUnit(new BasicAlu<WIDTH, REGS>());
   pipeline.addFuncUnit(new PredLu<WIDTH, REGS>());
   pipeline.addFuncUnit(new SramLsu<WIDTH, REGS, RAMSZ>());
-
+  pipeline.addFuncUnit(new Multiplier<WIDTH, REGS>(EXPOSE));
+  pipeline.addFuncUnit(new Divider<WIDTH, REGS>(EXPOSE));
+  pipeline.addFuncUnit(new BasicFpu<WIDTH, REGS>(EXPOSE));
+  pipeline.addFuncUnit(new FpMult<WIDTH, REGS>(EXPOSE));
   pipeline.generate();
-
   //#ifndef DEBUG
   optimize();
   //#endif
