@@ -12,3 +12,7 @@ Todo List:
   _ Add support for multiple SIMD lanes.
   _ Write a test app. Likely to be most fun: SIMD mandelbrot zoomer with text
     graphics output.
+    
+
+-Add support for SIMT.
+-Simulate design with Altera library.
