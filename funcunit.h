@@ -244,6 +244,7 @@ private:
 
 // Integrated SRAM load/store unit with no MMU, per-lane RAM
 template <unsigned N, unsigned R, unsigned L, unsigned SIZE>
+<<<<<<< HEAD
 class SramLsu : public FuncUnit<N, R, L> {
 public:
 	std::vector<unsigned> get_opcodes() {
@@ -292,6 +293,67 @@ public:
 		return o;
 	}
 private:
+=======
+  class SramLsu : public FuncUnit<N, R, L>
+{
+ public:
+  std::vector<unsigned> get_opcodes() {
+    std::vector<unsigned> ops;
+
+    ops.push_back(0x23);
+    ops.push_back(0x24);
+
+    return ops;
+  }
+
+  virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
+    const unsigned L2WORDS(CLOG2(SIZE/(N/8)));
+
+    using namespace std;
+    using namespace chdl;
+
+    hierarchy_enter("SramLsu");
+
+    fuOutput<N, R, L> o;
+
+    node w(!in.stall);
+
+    bvec<6> op(in.op);
+    bvec<N> imm(in.imm);
+
+    for (unsigned i = 0; i < L; ++i) {
+      bvec<N> r0(in.r0[i]), r1(in.r1[i]), imm(in.imm),
+              addr(imm + Mux(op[0], r1, r0));
+      bvec<L2WORDS> memaddr(Zext<L2WORDS>(addr[range<CLOG2(N/8), N-1>()]));
+      bvec<CLOG2(N)> memshift(Lit<CLOG2(N)>(8) *
+                                Zext<CLOG2(N)>(addr[range<0, CLOG2(N/8)-1>()]));
+
+      bvec<N> sramout = Syncmem(memaddr, r0, valid && !op[0], "rom.hex");
+
+      o.out[i] = sramout >> Reg(memshift);
+
+      // Simple character output from lane 0.
+      if (i == 0) {
+        node io(addr[N-1]), io_wr(valid && !op[0]),
+             char_out(io_wr && addr[range<0, N-2>()] == Lit<N-1>(0));
+        bvec<7> char_out_val(r0[range<0, 6>()]);
+        TAP(char_out);
+        TAP(char_out_val);
+      }
+    }
+
+    o.valid = Wreg(w, valid && op[0]);
+    o.iid = Wreg(w, in.iid);
+    o.didx = Wreg(w, in.didx);
+    o.pdest = Wreg(w, in.pdest);
+    o.wb = Wreg(w, in.wb);
+
+    hierarchy_exit();
+
+    return o;
+  }
+ private:
+>>>>>>> b66d8d266ad512e91fc50e3814f7524db65d634e
 };
 
 template <unsigned N, bool D>
@@ -370,6 +432,7 @@ void Serdiv(
 }
 
 template <unsigned N, unsigned R, unsigned L>
+<<<<<<< HEAD
 class SerialDivider : public FuncUnit<N, R, L>{
 public:
 	std::vector<unsigned> get_opcodes() {
@@ -422,6 +485,50 @@ private:
 	
 	chdl::node isReady;
 };
+=======
+  class SerialDivider : public FuncUnit<N, R, L>
+{
+ public:
+  std::vector<unsigned> get_opcodes() {
+    std::vector<unsigned> ops;
+
+    ops.push_back(0x0d);
+    ops.push_back(0x0e);
+    ops.push_back(0x17);
+    ops.push_back(0x18);
+
+    return ops;
+  }
+
+  virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
+    using namespace std;
+    using namespace chdl;
+
+    hierarchy_enter("SerialDivider");
+
+    tap("div_valid", valid);
+    tap("div_stall", in.stall);
+
+    fuOutput<N, R, L> o;
+    node outputReady, issue(valid && isReady);
+
+    for (unsigned i = 0; i < L; ++i) {
+      bvec<N> n(in.r0[i]), d(Mux(in.hasimm, in.r1[i], in.imm)), q, r;
+      Serdiv(q, r, outputReady, isReady, n, d, issue, in.stall);
+      o.out[i] = Mux(Wreg(issue, in.op[0]), r, q);
+    }
+
+    o.valid = outputReady;
+    o.iid = Wreg(issue, in.iid);
+    o.didx = Wreg(issue, in.didx);
+    o.pdest = Lit(0);
+    o.wb = Wreg(issue, in.wb);
+  
+    hierarchy_exit();
+
+    return o;
+  }
+>>>>>>> b66d8d266ad512e91fc50e3814f7524db65d634e
 
 
 // Basic FP unit with multi-cycle latencies
