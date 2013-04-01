@@ -458,24 +458,23 @@ public:
 		
 		
 		
+		hierarchy_enter("BasicFpu");
+		
 		
 		fuOutput<N, R, L> o;
-		
 		//port name
 		ostringstream str;
 		str << "fp" << "Basic";
 		
 		//
-		node finish, go;
+		bvec<1> finish;
 		//whether res can be delivered to next stage
-		
+		node go = finish[0] && !in.stall;
 		
 #ifdef DEBUG
-		//if(this->outportID == -1){
 			//built-in functions, allow debugging signals
 			
 			//counter, and latency mux that dynamially selects max counter value for counter
-			//hierarchy_enter("BasicFpu");
 			vec<64, bvec<MAXCWIDTH>> l_mux;
 			std::vector<unsigned> op = get_opcodes();
 			for(unsigned i = 0, s; i < op.size(); ++i){
@@ -505,8 +504,8 @@ public:
 							Mux(count==latency, count+Lit<MAXCWIDTH>(1),
 								Mux(in.stall, Lit<MAXCWIDTH>(0), count))));
 			*/
-			finish = (count==latency);
-			go = finish && !in.stall;
+			finish[0] = (count==latency);
+
 			tap(str.str()+"count", count);
 			tap(str.str()+"go", go);
 			tap(str.str()+"finish", finish);
@@ -535,59 +534,45 @@ public:
 				
 				o.out[i] = Wreg(go, Mux(in.op, mux_in));
 			}
-			//hierarchy_exit();
-		//}
 #else
-		//else{
-			//this module is exposed to other verilog module
-			//inport: result, finish(whether counter reaches max value) 
-			bvec<N*L> vitof = Input<N*L> (str.str()+"itof");
-			bvec<N*L> vftoi = Input<N*L> (str.str()+"ftoi");;
-			bvec<N*L> vfadd = Input<N*L> (str.str()+"fadd");
-			bvec<N*L> vfsub = Input<N*L> (str.str()+"fsub");
-			bvec<N*L> vfneg = Input<N*L> (str.str()+"fneg");;
-			bvec<3> exceptions = Input<3> (str.str()+"excp");
+			bvec<N*L> res = Input<N*L> (str.str()+"res");
 			
+			//bvec<1> infinish = Input<1> (str.str()+"finish");
+			//finish = infinish[0];
+			finish = Input<1> (str.str()+"finish");
 			
 			bvec<N*L> a;
 			bvec<N*L> b;
-			bvec<N*L> tmpb;
+			//bvec<N*L> tmpb;
+			
 			for(unsigned i = 0; i < L; ++i){
 				a[i*N, (i+1)*N-1] = (in.r0[i])[0, N-1];
 				
-				tmpb[i*N, (i+1)*N-1] = in.r1[i][0, N-1];
+				b[i*N, (i+1)*N-1] = in.r1[i][0, N-1];
 			}
-			b = tmpb;
+			//b = tmpb;
 			
 			for(unsigned i = 0; i < L; ++i){
-				vec<64, bvec<N>> mux_in;
-				mux_in[0x33] = vitof[i*N, (i+1)*N-1];
-				mux_in[0x34] = vftoi[i*N, (i+1)*N-1];
-				mux_in[0x35] = vfadd[i*N, (i+1)*N-1];
-				mux_in[0x36] = vfsub[i*N, (i+1)*N-1];
-				mux_in[0x39] = vfneg[i*N, (i+1)*N-1];
-				o.out[i] = Wreg(issue, Mux(in.op, mux_in));
+				o.out[i] = Wreg(go, res[i*N, (i+1)*N-1]);
 			}
 			
-			finish = Input(str.str()+"finish");
-			//outport: ivalid (input valid bit), stall(pipeline stall)
 			tap(str.str()+"a", a);
 			tap(str.str()+"b", b); 
 			tap(str.str()+"ivalid", valid);
 			tap(str.str()+"stall", in.stall);
-			tap(str.str()+"sub", in.op==Lit<IDLEN>(0x36));
-		//}
+			tap(str.str()+"opcode", in.op);
 #endif
 			
 		
 		
+		isReady = valid&&finish[0];
 		o.valid = Reg(Mux(go, 0, valid));
 		o.iid = Wreg(go, in.iid);
 		o.didx = Wreg(go, in.didx);
 		o.pdest = Wreg(go, in.pdest);
 		o.wb = Wreg(go, in.wb);
-		isReady = valid&&finish;
 		
+		hierarchy_exit();
 		return o;
 	}
 	

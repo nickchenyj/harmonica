@@ -10,11 +10,11 @@ ARCH = 4w8/8/1
 #harmonica-vl : harmonica.v testbench.v vgacont.v
 #	iverilog -o harmonica-vl harmonica.v testbench.v vgacont.v
 
-#harmonica.v : chdl_design.v
-#	sed 's/chdl_design/harmonica/' < chdl_design.v > harmonica.v
+harmonica.v : chdl_design.v
+	sed 's/chdl_design/harmonica/' < chdl_design.v > harmonica.v
 
-#chdl_design.v : harmonica.nand
-#	nand2v < harmonica.nand > chdl_design.v
+chdl_design.v : harmonica.nand
+	nand2v < harmonica.nand > chdl_design.v
 
 harmonica.nand harmonica.vcd : harmonica rom.hex
 	./harmonica
