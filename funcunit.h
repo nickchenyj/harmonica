@@ -244,60 +244,9 @@ private:
 
 // Integrated SRAM load/store unit with no MMU, per-lane RAM
 template <unsigned N, unsigned R, unsigned L, unsigned SIZE>
-<<<<<<< HEAD
-class SramLsu : public FuncUnit<N, R, L> {
+class SramLsu : public FuncUnit<N, R, L>{
 public:
 	std::vector<unsigned> get_opcodes() {
-		std::vector<unsigned> ops;
-		ops.push_back(0x23);
-		ops.push_back(0x24);
-		
-		return ops;
-	}
-	
-	virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
-		const unsigned L2WORDS(CLOG2(SIZE/(N/8)));
-		
-		using namespace std;
-		using namespace chdl;
-		
-		hierarchy_enter("SramLsu");
-		
-		fuOutput<N, R, L> o;
-		
-		node w(!in.stall);
-		
-		bvec<6> op(in.op);
-		bvec<N> imm(in.imm);
-		
-		for (unsigned i = 0; i < L; ++i) {
-			bvec<N> r0(in.r0[i]), r1(in.r1[i]), imm(in.imm),
-			addr(imm + Mux(op[0], r1, r0));
-			bvec<L2WORDS> memaddr(Zext<L2WORDS>(addr[range<CLOG2(N/8), N-1>()]));
-			bvec<CLOG2(N)> memshift(Lit<CLOG2(N)>(8) *
-			Zext<CLOG2(N)>(addr[range<0, CLOG2(N/8)-1>()]));
-			
-			bvec<N> sramout = Syncmem(memaddr, r0, valid && !op[0]);
-			
-			o.out[i] = sramout >> memshift;
-		}
-		
-		o.valid = Wreg(w, valid && op[0]);
-		o.iid = Wreg(w, in.iid);
-		o.didx = Wreg(w, in.didx);
-		o.pdest = Wreg(w, in.pdest);
-		o.wb = Wreg(w, in.wb);
-		
-		hierarchy_exit();
-		
-		return o;
-	}
-private:
-=======
-  class SramLsu : public FuncUnit<N, R, L>
-{
- public:
-  std::vector<unsigned> get_opcodes() {
     std::vector<unsigned> ops;
 
     ops.push_back(0x23);
@@ -353,7 +302,7 @@ private:
     return o;
   }
  private:
->>>>>>> b66d8d266ad512e91fc50e3814f7524db65d634e
+
 };
 
 template <unsigned N, bool D>
@@ -432,63 +381,9 @@ void Serdiv(
 }
 
 template <unsigned N, unsigned R, unsigned L>
-<<<<<<< HEAD
-class SerialDivider : public FuncUnit<N, R, L>{
-public:
-	std::vector<unsigned> get_opcodes() {
-		std::vector<unsigned> ops;
-		
-		ops.push_back(0x0d);
-		ops.push_back(0x0e);
-		ops.push_back(0x17);
-		ops.push_back(0x18);
-		
-		return ops;
-	}
-	
-	virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
-		using namespace std;
-		using namespace chdl;
-		
-		hierarchy_enter("SerialDivider");
-		
-		tap("div_valid", valid);
-		tap("div_stall", in.stall);
-		
-		fuOutput<N, R, L> o;
-		node outputReady, issue(valid && isReady);
-		
-		for (unsigned i = 0; i < L; ++i) {
-			bvec<N> n(in.r0[i]), d(Mux(in.hasimm, in.r1[i], in.imm)), q, r;
-			Serdiv(q, r, outputReady, isReady, n, d, issue, in.stall);
-			o.out[i] = Mux(Wreg(issue, in.op[0]), r, q);
-		}
-		
-		tap("div_out", o.out[0]);
-		tap("div_issue", issue);
-		tap("div_ready", isReady);
-		tap("div_oready", outputReady);
-		
-		o.valid = outputReady;
-		o.iid = Wreg(issue, in.iid);
-		o.didx = Wreg(issue, in.didx);
-		o.pdest = Lit(0);
-		o.wb = Wreg(issue, in.wb);
-		
-		hierarchy_exit();
-		
-		return o;
-	}
-	
-	virtual chdl::node ready() { return isReady; }
-private:
-	
-	chdl::node isReady;
-};
-=======
   class SerialDivider : public FuncUnit<N, R, L>
 {
- public:
+public:
   std::vector<unsigned> get_opcodes() {
     std::vector<unsigned> ops;
 
@@ -528,7 +423,11 @@ private:
 
     return o;
   }
->>>>>>> b66d8d266ad512e91fc50e3814f7524db65d634e
+  virtual chdl::node ready() { return isReady; }
+  
+private:
+	chdl::node isReady;
+};
 
 
 // Basic FP unit with multi-cycle latencies
@@ -567,9 +466,8 @@ public:
 		str << "fp" << "Basic";
 		
 		//
-		node finish, issue;
+		node finish, go;
 		//whether res can be delivered to next stage
-		issue = finish && !in.stall;
 		
 		
 #ifdef DEBUG
@@ -599,7 +497,7 @@ public:
 			
 			
 			bvec<MAXCWIDTH> count;
-			count = Reg(Mux(valid, Mux(busy, Lit<MAXCWIDTH>(0), count+Lit<MAXCWIDTH>(1)), 
+			count = Reg(Mux(valid, Lit<MAXCWIDTH>(0),
 							Mux(count==latency, count+Lit<MAXCWIDTH>(1),
 								Mux(!in.stall, count, Lit<MAXCWIDTH>(0)))));
 			
@@ -607,13 +505,11 @@ public:
 							Mux(count==latency, count+Lit<MAXCWIDTH>(1),
 								Mux(in.stall, Lit<MAXCWIDTH>(0), count))));
 			*/
-			outputReady = (count == latency);
-			isReady = (count == Lit<MAXCWIDTH>(0));
-			busy = ((count != Lit<MAXCWIDTH>(0)) && (count != latency));
-			
+			finish = (count==latency);
+			go = finish && !in.stall;
 			tap(str.str()+"count", count);
-			tap(str.str()+"issue", issue);
-			tap(str.str()+"outputReady", outputReady);
+			tap(str.str()+"go", go);
+			tap(str.str()+"finish", finish);
 			tap(str.str()+"isReady", isReady);
 			tap(str.str()+"ivalid", valid);
 			tap(str.str()+"in.stall", in.stall);
@@ -637,7 +533,7 @@ public:
 				mux_in[0x36] = (fsub);
 				mux_in[0x39] = (fneg);
 				
-				o.out[i] = Wreg(issue, Mux(in.op, mux_in));
+				o.out[i] = Wreg(go, Mux(in.op, mux_in));
 			}
 			//hierarchy_exit();
 		//}
@@ -685,12 +581,12 @@ public:
 			
 		
 		
-		o.valid = Reg(Mux(issue, 0, valid));
-		o.iid = Wreg(issue, in.iid);
-		o.didx = Wreg(issue, in.didx);
-		o.pdest = Wreg(issue, in.pdest);
-		o.wb = Wreg(issue, in.wb);
-
+		o.valid = Reg(Mux(go, 0, valid));
+		o.iid = Wreg(go, in.iid);
+		o.didx = Wreg(go, in.didx);
+		o.pdest = Wreg(go, in.pdest);
+		o.wb = Wreg(go, in.wb);
+		isReady = valid&&finish;
 		
 		return o;
 	}
