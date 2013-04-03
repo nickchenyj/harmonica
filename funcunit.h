@@ -126,8 +126,10 @@ public:
 		
 		hierarchy_enter("BasicAlu");
 		
+		#ifdef DEBUG
 		tap("valid_alu", valid);
 		tap("stall_alu", in.stall);
+		#endif
 		
 		fuOutput<N, R, L> o;
 		node w(!in.stall);
@@ -206,8 +208,10 @@ public:
 		
 		node w(!in.stall);
 		
+		#ifdef DEBUG
 		tap("valid_plu", valid);
 		tap("stall_plu", in.stall);
+		#endif
 		
 		for (unsigned i = 0; i < L; ++i) {
 			bvec<N> r0(in.r0[i]);
@@ -366,9 +370,6 @@ void Serdiv(
 	static bool copy = false;
 	if (!copy) {
 		copy = true;
-		tap("div_n", Wreg(v, n));
-		tap("div_d", Wreg(v, d));
-		tap("div_state", state);
 	}
 	ready = (bvec<CLOG2(N+3)>(sm) == Lit<CLOG2(N+3)>(N+2));
 	waiting = (bvec<CLOG2(N+3)>(sm) == Lit<CLOG2(N+3)>(0));
@@ -401,9 +402,6 @@ public:
 
     hierarchy_enter("SerialDivider");
 
-    tap("div_valid", valid);
-    tap("div_stall", in.stall);
-
     fuOutput<N, R, L> o;
     node outputReady, issue(valid && isReady);
 
@@ -432,9 +430,9 @@ private:
 
 // Basic FP unit with multi-cycle latencies
 template <unsigned N, unsigned R, unsigned L>
-class BasicFpu : public FuncUnit<N, R, L> {
+class FpuBasic : public FuncUnit<N, R, L> {
 public:
-	BasicFpu(bool getExposed = 0) : FuncUnit<N, R, L> (getExposed) {
+	FpuBasic(bool getExposed = 0) : FuncUnit<N, R, L> (getExposed) {
 		this->latency[0x33] = 50;		//itof
 		this->latency[0x34] = 50;		//ftoi
 		this->latency[0x35] = 14;		//fadd
@@ -464,7 +462,7 @@ public:
 		fuOutput<N, R, L> o;
 		//port name
 		ostringstream str;
-		str << "fp" << "Basic";
+		str << "Fpu" << "Basic";
 		
 		//
 		bvec<1> finish;
@@ -472,97 +470,299 @@ public:
 		node go = finish[0] && !in.stall;
 		
 #ifdef DEBUG
-			//built-in functions, allow debugging signals
-			
-			//counter, and latency mux that dynamially selects max counter value for counter
-			vec<64, bvec<MAXCWIDTH>> l_mux;
-			std::vector<unsigned> op = get_opcodes();
-			for(unsigned i = 0, s; i < op.size(); ++i){
-				l_mux[op[i]] = Lit<MAXCWIDTH>(this->getLatency(op[i]));
-			}
-			
-			//counter logic
-			//if !valid				set counter to 0
-			//else (valid, ongoing computation)
-			//		if( counter < max value, not finished)
-			//			counter++
-			//		else (computation finished)
-			//			if( !in.stall, deliver to next stage and reset counter)
-			//				reset counter
-			//			else
-			//				maintain value
-			
-			bvec<MAXCWIDTH> latency(Mux(in.op, l_mux));
-			
-			
-			bvec<MAXCWIDTH> count;
-			count = Reg(Mux(valid, Lit<MAXCWIDTH>(0),
-							Mux(count==latency, count+Lit<MAXCWIDTH>(1),
-								Mux(!in.stall, count, Lit<MAXCWIDTH>(0)))));
-			
-			/*count = Reg(Mux(count!=Lit<MAXCWIDTH>(0), Mux(issue, Lit<MAXCWIDTH>(0), Lit<MAXCWIDTH>(1)),
-							Mux(count==latency, count+Lit<MAXCWIDTH>(1),
-								Mux(in.stall, Lit<MAXCWIDTH>(0), count))));
-			*/
-			finish[0] = (count==latency);
+		//built-in functions, allow debugging signals
+		
+		//counter, and latency mux that dynamially selects max counter value for counter
+		vec<64, bvec<MAXCWIDTH>> l_mux;
+		std::vector<unsigned> op = get_opcodes();
+		for(unsigned i = 0, s; i < op.size(); ++i){
+			l_mux[op[i]] = Lit<MAXCWIDTH>(this->getLatency(op[i]));
+		}
+		
+		//counter logic
+		//if !valid				set counter to 0
+		//else (valid, ongoing computation)
+		//		if( counter < max value, not finished)
+		//			counter++
+		//		else (computation finished)
+		//			if( !in.stall, deliver to next stage and reset counter)
+		//				reset counter
+		//			else
+		//				maintain value
+		
+		bvec<MAXCWIDTH> latency(Mux(in.op, l_mux));
+		
+		bvec<MAXCWIDTH> count;
+		count = Reg(Mux(valid, Lit<MAXCWIDTH>(0),
+						Mux(count==latency, count+Lit<MAXCWIDTH>(1),
+							Mux(!in.stall, count, Lit<MAXCWIDTH>(0)))));
+		
+		finish[0] = (count==latency);
 
-			tap(str.str()+"count", count);
-			tap(str.str()+"go", go);
-			tap(str.str()+"finish", finish);
-			tap(str.str()+"isReady", isReady);
-			tap(str.str()+"ivalid", valid);
-			tap(str.str()+"in.stall", in.stall);
-			tap(str.str()+"ovalid", o.valid);
+		tap(str.str()+"count", count);
+		tap(str.str()+"go", go);
+		tap(str.str()+"finish", finish);
+		tap(str.str()+"isReady", isReady);
+		tap(str.str()+"ivalid", valid);
+		tap(str.str()+"in.stall", in.stall);
+		tap(str.str()+"ovalid", o.valid);
+		
+		for(unsigned i = 0; i < L; ++i){
+			bvec<N> a(in.r0[i]);
+			bvec<N> b(Mux(in.hasimm, in.r1[i], in.imm));
 			
-			for(unsigned i = 0; i < L; ++i){
-				bvec<N> a(in.r0[i]);
-				bvec<N> b(Mux(in.hasimm, in.r1[i], in.imm));
-				
-				
-				floatnum <FPU_E, FPU_M> itof (Itof<FPU_E, FPU_M, N> (a));
-				bvec<N> ftoi (Ftoi<FPU_E, FPU_M, N> (a));
-				floatnum <FPU_E, FPU_M> fadd (Fadd<FPU_E, FPU_M> (a, b));
-				floatnum <FPU_E, FPU_M> fsub (Fadd<FPU_E, FPU_M> (a, b));
-				bvec<N> fneg (Fneg<N>(a));
-				
-				vec<64, bvec<N>> mux_in;
-				mux_in[0x33] = (itof);
-				mux_in[0x34] = ftoi;
-				mux_in[0x35] = (fadd);
-				mux_in[0x36] = (fsub);
-				mux_in[0x39] = (fneg);
-				
-				o.out[i] = Wreg(go, Mux(in.op, mux_in));
-			}
+			floatnum <FPU_E, FPU_M> itof (Itof<FPU_E, FPU_M, N> (a));
+			bvec<N> ftoi (Ftoi<FPU_E, FPU_M, N> (a));
+			floatnum <FPU_E, FPU_M> fadd (Fadd<FPU_E, FPU_M> (a, b));
+			floatnum <FPU_E, FPU_M> fsub (Fadd<FPU_E, FPU_M> (a, b));
+			bvec<N> fneg (Fneg<N>(a));
+			
+			vec<64, bvec<N>> mux_in;
+			mux_in[0x33] = (itof);
+			mux_in[0x34] = ftoi;
+			mux_in[0x35] = (fadd);
+			mux_in[0x36] = (fsub);
+			mux_in[0x39] = (fneg);
+			
+			o.out[i] = Wreg(go, Mux(in.op, mux_in));
+		}
+		
 #else
-			bvec<N*L> res = Input<N*L> (str.str()+"res");
-			
-			//bvec<1> infinish = Input<1> (str.str()+"finish");
-			//finish = infinish[0];
-			finish = Input<1> (str.str()+"finish");
-			
-			bvec<N*L> a;
-			bvec<N*L> b;
-			//bvec<N*L> tmpb;
-			
-			for(unsigned i = 0; i < L; ++i){
-				a[i*N, (i+1)*N-1] = (in.r0[i])[0, N-1];
-				
-				b[i*N, (i+1)*N-1] = in.r1[i][0, N-1];
+		bvec<N*L> res = Input<N*L> (str.str()+"Res");
+		finish = Input<1> (str.str()+"Finish");
+		bvec<N*L> a;
+		bvec<N*L> b;
+		
+		for(unsigned i = 0; i < L; ++i){
+		    for (unsigned j = 0; j < N; ++j) {
+			  a[i*N + j] = in.r0[i][j];
+			  b[i*N + j] = Mux(in.hasimm, in.r1[i][j], in.imm[j]);
 			}
-			//b = tmpb;
-			
-			for(unsigned i = 0; i < L; ++i){
-				o.out[i] = Wreg(go, res[i*N, (i+1)*N-1]);
+		}
+		
+		for(unsigned i = 0; i < L; ++i){
+			for(unsigned j = 0; j < N; ++j){
+				o.out[i][j] = Wreg(go, res[i*N+j]);
 			}
+		}
+		
+		
+		tap(str.str()+"A", a);
+		tap(str.str()+"B", b); 
+		tap(str.str()+"Valid", valid);
+		tap(str.str()+"Stall", in.stall);
+		tap(str.str()+"Op", in.op);
 			
-			tap(str.str()+"a", a);
-			tap(str.str()+"b", b); 
-			tap(str.str()+"ivalid", valid);
-			tap(str.str()+"stall", in.stall);
-			tap(str.str()+"opcode", in.op);
 #endif
+
+		isReady = valid&&finish[0];
+		o.valid = Reg(Mux(go, 0, valid));
+		o.iid = Wreg(go, in.iid);
+		o.didx = Wreg(go, in.didx);
+		o.pdest = Wreg(go, in.pdest);
+		o.wb = Wreg(go, in.wb);
+		
+		hierarchy_exit();
+		return o;
+	}
+	
+	virtual chdl::node ready() { return isReady; }
+	
+private:
+	chdl::node isReady;
+};
+
+
+// FP Multiplier/Divider
+template <unsigned N, unsigned R, unsigned L>
+class FpuMultDiv : public FuncUnit<N, R, L> {
+public:
+	FpuMultDiv(bool getExposed = 0) : FuncUnit<N, R, L> (getExposed) {
+		this->latency[0x37] = 11;		//fmul
+		this->latency[0x38] = 14;		//fdiv
+	}
+	
+	std::vector<unsigned> get_opcodes() {
+		std::vector<unsigned> ops;
+		ops.push_back(0x37);		//fmul
+		ops.push_back(0x38);		//fdiv
+		return ops;
+	}
+	
+	virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
+		using namespace std;
+		using namespace chdl;
+		
+		
+		
+		hierarchy_enter("FpuMult");
+
+		fuOutput<N, R, L> o;
+		//port name
+		ostringstream str;
+		str << "Fpu" << "Mult";
+		
+		bvec<1> finish;
+		//whether res can be delivered to next stage
+		node go = finish[0] && !in.stall;
+		
+#ifdef DEBUG
+		//built-in functions, allow debugging signals
+		
+		//counter, and latency mux that dynamially selects max counter value for counter
+		vec<64, bvec<MAXCWIDTH>> l_mux;
+		std::vector<unsigned> op = get_opcodes();
+		for(unsigned i = 0, s; i < op.size(); ++i){
+			l_mux[op[i]] = Lit<MAXCWIDTH>(this->getLatency(op[i]));
+		}
+		
+		//counter logic
+		//if !valid				set counter to 0
+		//else (valid, ongoing computation)
+		//		if( counter < max value, not finished)
+		//			counter++
+		//		else (computation finished)
+		//			if( !in.stall, deliver to next stage and reset counter)
+		//				reset counter
+		//			else
+		//				maintain value
+		
+		bvec<MAXCWIDTH> latency(Mux(in.op, l_mux));
+		
+		
+		bvec<MAXCWIDTH> count;
+		count = Reg(Mux(valid, Lit<MAXCWIDTH>(0),
+						Mux(count==latency, count+Lit<MAXCWIDTH>(1),
+							Mux(!in.stall, count, Lit<MAXCWIDTH>(0)))));
+
+		finish[0] = (count==latency);
+
+		tap(str.str()+"count", count);
+		tap(str.str()+"go", go);
+		tap(str.str()+"finish", finish);
+		tap(str.str()+"isReady", isReady);
+		tap(str.str()+"ivalid", valid);
+		tap(str.str()+"in.stall", in.stall);
+		tap(str.str()+"ovalid", o.valid);
+		
+		for(unsigned i = 0; i < L; ++i){
+			bvec<N> a(in.r0[i]);
+			bvec<N> b(Mux(in.hasimm, in.r1[i], in.imm));
+			//dummy part, no computation is done
+			mux_in[0x36] = a;
+			mux_in[0x39] = b;
 			
+			o.out[i] = Wreg(go, Mux(in.op, mux_in));
+		}
+		
+#else
+		
+		bvec<N*L> res = Input<N*L> (str.str()+"Res");
+		finish = Input<1> (str.str()+"Finish");
+		
+		bvec<N*L> a;
+		bvec<N*L> b;
+	
+		for(unsigned i = 0; i < L; ++i){
+			for (unsigned j = 0; j < N; ++j) {
+				a[i*N + j] = in.r0[i][j];
+				b[i*N + j] = Mux(in.hasimm, in.r1[i][j], in.imm[j]);
+			}
+		}
+		
+		for(unsigned i = 0; i < L; ++i){
+			for(unsigned j = 0; j < N; ++j){
+				o.out[i][j] = Wreg(go, res[i*N+j]);
+			}
+		}
+		
+		
+		tap(str.str()+"A", a);
+		tap(str.str()+"B", b); 
+		tap(str.str()+"Valid", valid);
+		tap(str.str()+"Stall", in.stall);
+		tap(str.str()+"Op", in.op);
+#endif
+	
+		isReady = valid&&finish[0];
+		o.valid = Reg(Mux(go, 0, valid));
+		o.iid = Wreg(go, in.iid);
+		o.didx = Wreg(go, in.didx);
+		o.pdest = Wreg(go, in.pdest);
+		o.wb = Wreg(go, in.wb);
+		
+		hierarchy_exit();
+		return o;
+	}
+	
+	virtual chdl::node ready() { return isReady; }
+	
+private:
+	chdl::node isReady;
+};
+
+
+
+// Integer divider
+template <unsigned N, unsigned R, unsigned L>
+class AluDiv : public FuncUnit<N, R, L> {
+public:
+	AluDiv(bool getExposed = 0) : FuncUnit<N, R, L> (getExposed) {
+		this->latency[0x0d] = 15;
+		this->latency[0x0e] = 15;
+		this->latency[0x17] = 15;
+		this->latency[0x18] = 15;
+	}
+	
+	std::vector<unsigned> get_opcodes() {
+		std::vector<unsigned> ops;
+		ops.push_back(0x0d);
+		ops.push_back(0x0e);
+		ops.push_back(0x17);
+		ops.push_back(0x18);
+		return ops;
+	}
+	
+	virtual fuOutput<N, R, L> generate(fuInput<N, R, L> in, chdl::node valid) {
+		using namespace std;
+		using namespace chdl;
+		
+		hierarchy_enter("AluDiv");
+		
+		fuOutput<N, R, L> o;
+		//port name
+		ostringstream str;
+		str << "Alu" << "Div";
+		
+		bvec<1> finish;
+		//whether res can be delivered to next stage
+		node go = finish[0] && !in.stall;
+			
+		bvec<N*L> q = Input<N*L> (str.str()+"Q");
+		bvec<N*L> r = Input<N*L> (str.str()+"R");
+		finish = Input<1> (str.str()+"Finish");
+		
+		bvec<N*L> a;
+		bvec<N*L> b;
+		
+		for(unsigned i = 0; i < L; ++i){
+			for (unsigned j = 0; j < N; ++j) {
+				a[i*N + j] = in.r0[i][j];
+				b[i*N + j] = Mux(in.hasimm, in.r1[i][j], in.imm[j]);
+			}
+		}
+		
+		node sel = in.op[0];//0==Mod, 1==div
+		for(unsigned i = 0; i < L; ++i){
+			for(unsigned j = 0; j < N; ++j){
+				o.out[i][j] = Wreg(go, Mux(sel, r[i*N+j], q[i*N+j]));
+			}
+		}
+		
+		tap(str.str()+"A", a);
+		tap(str.str()+"B", b); 
+		tap(str.str()+"Valid", valid);
+		tap(str.str()+"Stall", in.stall);
 		
 		
 		isReady = valid&&finish[0];

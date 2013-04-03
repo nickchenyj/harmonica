@@ -28,11 +28,15 @@ void Regfile(vec<R, rdport<M, N, L>> r, wrport<M, N, L> w, string prefix = ""){
 		for (unsigned i = 0; i < SIZE; ++i) {
 			unsigned long initialval(i == 0 ? j : 0);
 			regs[j][i] = Wreg(wrsig[i] && w.we[j], w.d[j], initialval);
-			#ifdef DEBUG
-			ostringstream oss;
-			oss << prefix << "reg" << j << i;
-			tap(oss.str(), regs[j][i]);
-			#endif
+#ifndef DEBUG
+			if(j == 0 && prefix == ""){
+#endif
+				ostringstream oss;
+				oss << prefix << "reg" << j << i;
+				tap(oss.str(), regs[j][i]);
+#ifndef DEBUG
+			}
+#endif
 		}
 	}
 	
@@ -53,9 +57,10 @@ void Bitfile(vec<R, rdport<M, 1, 1>> r,
 	
 	const unsigned long SIZE(1<<M);
 	bvec<SIZE> setsig(Decoder(set_idx, set)), clearsig(Decoder(clear_idx, clear));
+	#ifdef DEBUG
 	tap("setsig", setsig);
 	tap("clearsig", clearsig);
-	
+	#endif
 	vec<SIZE, bvec<1>> bits;
 	for (unsigned i = 0; i < SIZE; ++i) {
 		bits[i] =

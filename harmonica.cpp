@@ -250,8 +250,8 @@ template<unsigned N, unsigned R, unsigned L> struct harmonica {
 		bvec<8> fustall;
 		bvec<N> nextpc_d(PipelineReg(1, pc + Lit<N>(N/8))),
 				nextpc_x(PipelineReg(2, nextpc_d));
-				TAP(nextpc_d);
-				TAP(nextpc_x);
+				DBGTAP(nextpc_d);
+				DBGTAP(nextpc_x);
 				
 				hierarchy_exit();
 				
@@ -403,10 +403,15 @@ int main() {
 	
 	pipeline.addFuncUnit(new BasicAlu<WIDTH, REGS, LANES>());
 	pipeline.addFuncUnit(new PredLu<WIDTH, REGS, LANES>());
+	//Serial divider is only used in debug mode
+#ifdef DEBUG
 	pipeline.addFuncUnit(new SerialDivider<WIDTH, REGS, LANES>());
+#else
+	pipeline.addFuncUnit(new AluDiv<WIDTH, REGS, LANES>(EXPOSE));
+#endif
 	pipeline.addFuncUnit(new SramLsu<WIDTH, REGS, LANES, RAMSZ>());
-	pipeline.addFuncUnit(new BasicFpu<WIDTH, REGS, LANES>(EXPOSE));
-	
+	pipeline.addFuncUnit(new FpuBasic<WIDTH, REGS, LANES>(EXPOSE));
+	pipeline.addFuncUnit(new FpuMultDiv<WIDTH, REGS, LANES>(EXPOSE));
 	pipeline.generate();
 	
 	//#ifndef DEBUG
@@ -414,8 +419,8 @@ int main() {
 	//#endif
 	
 	// Do the simulation
-	ofstream wave_file("harmonica.vcd");
-	run(wave_file, 10000);
+	//ofstream wave_file("harmonica.vcd");
+	//run(wave_file, 10000);
 	
 	// Print the netlist
 	ofstream netlist_file("harmonica.nand");

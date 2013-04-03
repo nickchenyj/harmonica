@@ -84,10 +84,12 @@ void genPipelineRegs() {
       pr.bits[i].q = Wreg(!pr.anystall,
                           Mux(pr.flushorbubble, pr.bits[i].d, Lit(0)));
     }
+    #ifdef DEBUG
       { ostringstream oss; oss << "stall" << it->first;
         tap(oss.str(), pr.anystall); }
       { ostringstream oss; oss << "flushorbubble" << it->first;
         tap(oss.str(), pr.flushorbubble); }
+    #endif
 
     hierarchy_exit();
   }
