@@ -28,8 +28,12 @@ theloop:  ld     %r3, %r0, #0
     	  divi   %r4, %r3, #5
     	  modi   %r5, %r4, #2
     	  itof	 %r6, %r5
-    	  itof	 %r7, %r5
-		  fadd	 %r7, %r6, %r7
+    	  itof	 %r7, %r2
+		  fadd	 %r5, %r6, %r7
+		  ftoi	 %r4, %r5
+		  fmul	 %r7, %r5, %r7
+		  itof	 %r3, %r3
+		  fdiv	 %r3, %r7, %r3 
 finished: jmpi   finished
 
 subroutine:
